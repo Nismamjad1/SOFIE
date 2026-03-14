@@ -182,6 +182,81 @@ public:
       }
       return out.str();
    }
+
+std::string Generate_GPU_Kernel_ALPAKA(std::string /*opName*/) override {
+      std::string op;
+      op += "\n//------ SOFTMAX_KERNEL_ALPAKA\n";
+      op += "struct SoftmaxKernel {\n";
+      op += SP + "template<typename TAcc, typename T>\n";
+      op += SP + "ALPAKA_FN_ACC void operator()(\n";
+      op += SP + SP + "TAcc const& acc,\n";
+      op += SP + SP + "T const* __restrict__ in,\n";
+      op += SP + SP + "T*       __restrict__ out,\n";
+      op += SP + SP + "std::size_t N,\n";
+      op += SP + SP + "std::size_t stride,\n";
+      op += SP + SP + "std::size_t numVectors) const {\n";
+      op += SP + SP + "const auto vid = alpaka::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0];\n";
+      op += SP + SP + "if (vid >= numVectors) return;\n";
+      op += SP + SP + "const std::size_t base = vid * stride;\n";
+      op += SP + SP + "T vmax = in[base];\n";
+      op += SP + SP + "for (std::size_t i = 1; i < N; ++i) {\n";
+      op += SP + SP + SP + "T val = in[base + i * stride];\n";
+      op += SP + SP + SP + "if (val > vmax) vmax = val;\n";
+      op += SP + SP + "}\n";
+      op += SP + SP + "T sum = static_cast<T>(0);\n";
+      op += SP + SP + "for (std::size_t i = 0; i < N; ++i) {\n";
+      op += SP + SP + SP + "T e = alpaka::math::exp(acc, in[base + i * stride] - vmax);\n";
+      op += SP + SP + SP + "out[base + i * stride] = e;\n";
+      op += SP + SP + SP + "sum += e;\n";
+      op += SP + SP + "}\n";
+      op += SP + SP + "for (std::size_t i = 0; i < N; ++i) {\n";
+      op += SP + SP + SP + "out[base + i * stride] /= sum;\n";
+      op += SP + SP + "}\n";
+      op += SP + "}\n";
+      op += "};\n";
+      return op;
+   }
+
+   std::string Generate_GPU_Kernel_Definitions_ALPAKA(std::string /*opName*/) override {
+      return SP + "SoftmaxKernel softmaxKernel;\n";
+   }
+
+   std::string Generate_GPU_ALPAKA(std::string OpName) override {
+      OpName = "op_" + OpName;
+      if (fShape.empty()) {
+         throw std::runtime_error(
+            "TMVA SOFIE Softmax GPU called without being initialized first");
+      }
+      std::stringstream out;
+      size_t size       = fShape.size();
+      size_t length     = ConvertShapeToLength(fShape);
+      size_t axis       = (fAttrAxis < 0) ? size + fAttrAxis : (size_t)fAttrAxis;
+      size_t N          = fShape[axis];
+      size_t stride     = 1;
+      for (size_t d = axis + 1; d < size; ++d) stride *= fShape[d];
+      size_t numVectors = length / N;
+
+      out << "\n//------ SOFTMAX_GPU_ALPAKA\n";
+      out << SP << "auto const elementsPerThread_" << fNX << " = Vec::all(static_cast<Idx>(1));\n";
+      out << SP << "auto const elementsPerGrid_"   << fNX << " = Vec::all(Idx{" << numVectors << "});\n";
+      out << SP << "alpaka::KernelCfg<Acc> const kernelCfg_" << fNX
+          << " = {elementsPerGrid_" << fNX << ", elementsPerThread_" << fNX << "};\n";
+      out << SP << "auto const workDiv_" << fNX
+          << " = alpaka::getValidWorkDiv(kernelCfg_" << fNX << ", devAcc, softmaxKernel, "
+          << "alpaka::getPtrNative(deviceBuf_" << fNX << "), "
+          << "alpaka::getPtrNative(deviceBuf_" << fNY << "), "
+          << "static_cast<Idx>(" << N          << "), "
+          << "static_cast<Idx>(" << stride     << "), "
+          << "static_cast<Idx>(" << numVectors << "));\n";
+      out << SP << "alpaka::exec<Acc>(queue, workDiv_" << fNX << ", softmaxKernel, "
+          << "alpaka::getPtrNative(deviceBuf_" << fNX << "), "
+          << "alpaka::getPtrNative(deviceBuf_" << fNY << "), "
+          << "static_cast<Idx>(" << N          << "), "
+          << "static_cast<Idx>(" << stride     << "), "
+          << "static_cast<Idx>(" << numVectors << "));\n";
+      return out.str();
+   }
+
 };
 
 } // namespace SOFIE

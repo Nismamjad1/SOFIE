@@ -21,6 +21,14 @@
 #include "Split_0_FromONNX_GPU_ALPAKA.hxx"
 #include "Split_1_FromONNX_GPU_ALPAKA.hxx"
 #include "Split_2_FromONNX_GPU_ALPAKA.hxx"
+#include "Softmax1d_FromONNX_GPU_ALPAKA.hxx"
+#include "input_models/references/Softmax1d.ref.hxx"
+#include "Softmax2d_FromONNX_GPU_ALPAKA.hxx"
+#include "input_models/references/Softmax2d.ref.hxx"
+#include "Softmax3d_FromONNX_GPU_ALPAKA.hxx"
+#include "input_models/references/Softmax3d.ref.hxx"
+#include "Softmax4d_FromONNX_GPU_ALPAKA.hxx"
+#include "input_models/references/Softmax4d.ref.hxx"
 
 #include <alpaka/alpaka.hpp>
 #include <cuda_runtime.h>
@@ -508,4 +516,51 @@ TEST_F(SofieAlpakaTest, Split_2)
         EXPECT_LE(std::abs(res0_ptr[j] - correct_output[0][j]), TOLERANCE);
     for (size_t j = 0; j < correct_output[1].size(); ++j)
         EXPECT_LE(std::abs(res1_ptr[j] - correct_output[1][j]), TOLERANCE);
+}
+TEST_F(SofieAlpakaTest, Softmax1d)
+{
+   constexpr float TOLERANCE = 1e-4f;
+   auto input_h = alpaka::allocBuf<float, Idx>(host, Ext1D::all(Idx{3}));
+   float* input_ptr = reinterpret_cast<float*>(alpaka::getPtrNative(input_h));
+   float* correct = Softmax1d_ExpectedOutput::output;
+   for (Idx i = 0; i < 3; ++i) input_ptr[i] = Softmax1d_ExpectedOutput::input[i];
+   auto input_d = alpaka::allocBuf<float, Idx>(device, Ext1D::all(Idx{3}));
+   alpaka::memcpy(queue, input_d, input_h);
+   alpaka::wait(queue);
+   auto result_h = alpaka::allocBuf<float, Idx>(host, Ext1D::all(Idx{3}));
+   {
+      SOFIE_Softmax1d::Session<alpaka::TagGpuCudaRt> session;
+      auto result = session.infer(input_d);
+      alpaka::wait(queue);
+      cudaDeviceSynchronize();
+      alpaka::memcpy(queue, result_h, result);
+      alpaka::wait(queue);
+   }
+   float* res_ptr = reinterpret_cast<float*>(alpaka::getPtrNative(result_h));
+   for (size_t i = 0; i < 3; ++i)
+      EXPECT_LE(std::abs(res_ptr[i] - correct[i]), TOLERANCE);
+}
+
+TEST_F(SofieAlpakaTest, Softmax2d)
+{
+   constexpr float TOLERANCE = 1e-4f;
+   auto input_h = alpaka::allocBuf<float, Idx>(host, Ext1D::all(Idx{3}));
+   float* input_ptr = reinterpret_cast<float*>(alpaka::getPtrNative(input_h));
+   float* correct = Softmax2d_ExpectedOutput::output;
+   for (Idx i = 0; i < 3; ++i) input_ptr[i] = Softmax2d_ExpectedOutput::input[i];
+   auto input_d = alpaka::allocBuf<float, Idx>(device, Ext1D::all(Idx{3}));
+   alpaka::memcpy(queue, input_d, input_h);
+   alpaka::wait(queue);
+   auto result_h = alpaka::allocBuf<float, Idx>(host, Ext1D::all(Idx{3}));
+   {
+      SOFIE_Softmax2d::Session<alpaka::TagGpuCudaRt> session;
+      auto result = session.infer(input_d);
+      alpaka::wait(queue);
+      cudaDeviceSynchronize();
+      alpaka::memcpy(queue, result_h, result);
+      alpaka::wait(queue);
+   }
+   float* res_ptr = reinterpret_cast<float*>(alpaka::getPtrNative(result_h));
+   for (size_t i = 0; i < 3; ++i)
+      EXPECT_LE(std::abs(res_ptr[i] - correct[i]), TOLERANCE);
 }

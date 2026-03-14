@@ -1,3 +1,4 @@
-namespace Softmax1d_ExpectedOutput{
-   float output[] = {0.09003058, 0.24472848, 0.66524094};
-}
+namespace Softmax1d_ExpectedOutput {
+    float input[] = {1.0f, 2.0f, 3.0f};
+    float output[] = {0.09003057f, 0.24472846f, 0.66524094f};
+} // namespace Softmax1d_ExpectedOutput
